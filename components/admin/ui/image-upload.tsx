@@ -5,7 +5,7 @@ import { ImagePlus, Loader2, Trash2 } from 'lucide-react'
 import { adminService } from '@/lib/services'
 import { imageUrl } from '@/lib/utils'
 
-const MAX_MB = 5
+const MAX_MB = 4
 const ALLOWED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 
 type Props = { label?: string; value: string; onChange: (url: string) => void }
