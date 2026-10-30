@@ -9,6 +9,7 @@ export type PublicStory = {
 }
 export type PublicCharacter = {
   id: number; storyId: number; story: string; name: string; role: string; personality: string; backstory: string
+  image?: string | null
 }
 export type ProgressCard = {
   storyId: number; title: string; genre: string; coverImage: string; sceneIndex: number; progress: number
@@ -30,11 +31,15 @@ export type DashboardStats = {
   newUsersWeek: number; activePlayersWeek: number; messagesToday: number
 }
 export type AdminUser = User & { storiesPlayed: number }
-export type CharacterInput = { storyId: number; name: string; role: string; personality: string; backstory: string }
+export type CharacterInput = {
+  storyId: number; name: string; role: string; personality: string; backstory: string; image?: string | null
+}
 
 export type SceneBrief = { index: number; title: string; mood: string }
 export type CurrentScene = SceneBrief & { narration: string }
-export type ChatMessage = { id: number; role: 'user' | 'assistant'; content: string; createdAt: string }
+export type ChatMessage = {
+  id: number; role: 'user' | 'assistant'; content: string; createdAt: string; imageUrl?: string | null
+}
 export type PlayState = {
   storyId: number; title: string; languages: string[]; scenes: SceneBrief[]
   currentSceneIndex: number; currentScene: CurrentScene

@@ -4,7 +4,8 @@ import { ApiError, handleUnauthorized, readError } from './api'
 
 export type StreamEvent =
   | { type: 'token'; content: string }
-  | { type: 'done'; choices: string[]; memory: string }
+  | { type: 'done'; messageId: number; choices: string[]; memory: string; imagePending: boolean }
+  | { type: 'image'; messageId: number; url: string | null }
   | { type: 'error'; message: string }
 
 /** POST + Server-Sent Events (EventSource can't POST, so we read the stream by hand). */

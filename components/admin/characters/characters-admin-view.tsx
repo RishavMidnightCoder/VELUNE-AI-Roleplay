@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Image as ImageIcon, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { PageHeader } from '../ui/page-header'
 import { Field, FormSection, Input, Select, Textarea } from '../ui/field'
 import { EmptyState, ErrorBox, LoadingBlock } from '@/components/common/states'
 import { useAsync } from '@/hooks/use-async'
 import { adminService } from '@/lib/services'
 import type { PublicCharacter, StoryAdminRow } from '@/lib/types'
+import { imageUrl } from '@/lib/utils'
+
 
 function CharacterForm({
   stories, initial, onSaved, onCancel,
@@ -22,8 +24,24 @@ function CharacterForm({
   const [storyId, setStoryId] = useState<number>(initial?.storyId ?? stories[0]?.id ?? 0)
   const [personality, setPersonality] = useState(initial?.personality ?? '')
   const [backstory, setBackstory] = useState(initial?.backstory ?? '')
+  const [image, setImage] = useState<string | null>(initial?.image ?? null)
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const onPickImage = async (file: File | undefined) => {
+    if (!file) return
+    setError(null)
+    setUploading(true)
+    try {
+      const res = await adminService.uploadImage(file)
+      setImage(res.url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not upload the image')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -32,7 +50,7 @@ function CharacterForm({
     if (!storyId) return setError('Choose a story first.')
     setSaving(true)
     try {
-      const payload = { storyId, name: name.trim(), role, personality, backstory }
+      const payload = { storyId, name: name.trim(), role, personality, backstory, image }
       if (initial) await adminService.updateCharacter(initial.id, payload)
       else await adminService.createCharacter(payload)
       onSaved()
@@ -54,11 +72,37 @@ function CharacterForm({
             {stories.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
           </Select>
         </Field>
+        <Field label="Portrait">
+          <div className="flex items-center gap-4">
+            <div className="flex size-20 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[.04]">
+              {image ? (
+                <img src={imageUrl(image)} alt="Portrait" className="size-full object-cover" />
+              ) : (
+                <ImageIcon className="size-6 text-white/30" />
+              )}
+            </div>
+            <div className="flex flex-col gap-2 text-xs text-white/50">
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploading}
+                onChange={(e) => onPickImage(e.target.files?.[0])}
+                className="text-xs"
+              />
+              <span>{uploading ? 'Uploading...' : 'Use a clear, front-facing photo of one person.'}</span>
+              {image && (
+                <button type="button" onClick={() => setImage(null)} className="w-fit text-red-300 hover:underline">
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        </Field>
         <Field label="Personality"><Textarea rows={3} value={personality} onChange={(e) => setPersonality(e.target.value)} placeholder="Smart, mysterious, hiding a secret." /></Field>
         <Field label="Backstory"><Textarea rows={4} value={backstory} onChange={(e) => setBackstory(e.target.value)} /></Field>
         {error && <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">{error}</p>}
         <div className="flex gap-3">
-          <button type="submit" disabled={saving} className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 disabled:opacity-60">
+          <button type="submit" disabled={saving || uploading} className="rounded-full bg-white px-6 py-3 text-sm font-medium text-slate-950 disabled:opacity-60">
             {saving ? 'Saving...' : 'Save character'}
           </button>
           <button type="button" onClick={onCancel} className="rounded-full border border-white/15 px-5 py-3 text-sm text-white/70">Cancel</button>

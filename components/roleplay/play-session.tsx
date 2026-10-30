@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ActionBar } from './action-bar'
-import { MessageList } from './message-list'
+import { MessageList, type Phase } from './message-list'
 import { SceneSidebar } from './scene-sidebar'
 import { StoryStatePanel } from './story-state-panel'
 import { DEFAULT_CHOICES } from '@/lib/constants'
 import { playService } from '@/lib/services'
 import { streamAction } from '@/lib/stream'
-import type { ChatMessage, PlayState, PublicStory } from '@/lib/types'
 import { imageUrl } from '@/lib/utils'
+import type { ChatMessage, PlayState, PublicStory } from '@/lib/types'
 
 type Props = { initial: PlayState; story: PublicStory; onRestart: () => void }
 
@@ -21,9 +21,11 @@ export function PlaySession({ initial, story, onRestart }: Props) {
   const [progress, setProgress] = useState(initial.progress)
   const [choices, setChoices] = useState<string[]>(DEFAULT_CHOICES)
   const [streamText, setStreamText] = useState('')
-  const [streaming, setStreaming] = useState(false)
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [pendingImageId, setPendingImageId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const busy = phase !== 'idle'
   const nextId = useRef(-1)
   const abortRef = useRef<AbortController | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
@@ -31,12 +33,12 @@ export function PlaySession({ initial, story, onRestart }: Props) {
   useEffect(() => () => abortRef.current?.abort(), [])
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages, streamText])
+  }, [messages, streamText, pendingImageId])
 
   const send = async (action: string, language: string) => {
-    if (streaming) return
+    if (busy) return
     setError(null)
-    setStreaming(true)
+    setPhase('writing')
     setStreamText('')
     setMessages((m) => [...m, { id: nextId.current--, role: 'user', content: action, createdAt: new Date().toISOString() }])
 
@@ -53,9 +55,20 @@ export function PlaySession({ initial, story, onRestart }: Props) {
             full += event.content
             setStreamText(full)
           } else if (event.type === 'done') {
-            setMessages((m) => [...m, { id: nextId.current--, role: 'assistant', content: full, createdAt: new Date().toISOString() }])
+            setStreamText('')
+            setMessages((m) => [
+              ...m,
+              { id: event.messageId, role: 'assistant', content: full, createdAt: new Date().toISOString(), imageUrl: null },
+            ])
             setChoices(event.choices.length ? event.choices : DEFAULT_CHOICES)
             setMemory(event.memory)
+            if (event.imagePending) {
+              setPendingImageId(event.messageId)
+              setPhase('painting')
+            }
+          } else if (event.type === 'image') {
+            setMessages((m) => m.map((x) => (x.id === event.messageId ? { ...x, imageUrl: event.url } : x)))
+            setPendingImageId(null)
           } else if (event.type === 'error') {
             setError(event.message)
           }
@@ -68,12 +81,13 @@ export function PlaySession({ initial, story, onRestart }: Props) {
       }
     } finally {
       setStreamText('')
-      setStreaming(false)
+      setPendingImageId(null)
+      setPhase('idle')
     }
   }
 
   const goToScene = async (index: number) => {
-    if (streaming || index === sceneIndex) return
+    if (busy || index === sceneIndex) return
     try {
       const res = await playService.setScene(initial.storyId, index)
       setSceneIndex(res.currentSceneIndex)
@@ -86,7 +100,7 @@ export function PlaySession({ initial, story, onRestart }: Props) {
   }
 
   const restart = async () => {
-    if (streaming) return
+    if (busy) return
     if (!confirm('Restart this story? Your chat history and memory will be cleared.')) return
     try {
       await playService.reset(initial.storyId)
@@ -116,7 +130,7 @@ export function PlaySession({ initial, story, onRestart }: Props) {
             <p className="font-serif text-xl leading-8 text-white/75">{currentScene.narration}</p>
           )}
 
-          <MessageList messages={messages} streamText={streamText} streaming={streaming} />
+          <MessageList messages={messages} streamText={streamText} phase={phase} pendingImageId={pendingImageId} />
 
           {error && (
             <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-xs text-red-200">{error}</p>
@@ -126,7 +140,7 @@ export function PlaySession({ initial, story, onRestart }: Props) {
       </section>
 
       <StoryStatePanel scene={currentScene} progress={progress} memory={memory} />
-      <ActionBar choices={choices} languages={initial.languages} disabled={streaming} onSend={send} />
+      <ActionBar choices={choices} languages={initial.languages} disabled={busy} onSend={send} />
     </div>
   )
 }
